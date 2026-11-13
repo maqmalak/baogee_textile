@@ -1396,3 +1396,36 @@ export const SHIFT_SCHEDULE_ASSIGNMENT_CONFIG: DocConfig = {
   defaults: ({ company }) => ({ company, enabled: 1, shift_status: "Active", create_shifts_after: todayISO() }),
   linkEffects: { employee: (emp) => employeeInfo(emp) },
 };
+
+
+/* ============================================================================ Old HR site history (read-only) */
+export const LEGACY_SALARY_CONFIG: DocConfig = {
+  doctype: "Legacy Salary Sheet",
+  base: "/payroll/old-salary-sheets",
+  singular: "Old Salary Sheet",
+  plural: "Old Salary Sheets",
+  subtitle: "Half-monthly and monthly salary sheets from the old HR site (baogeetextile.pk), each linked to its salary slip and payroll run",
+  icon: Receipt,
+  companyScoped: false,
+  listFields: ["name", "employee", "employee_name", "employee_code", "from_date", "to_date", "presents", "ot_hours", "earned", "advance", "loan", "net"],
+  columns: [employeeCol, textCol("employee_code", "Code"), dateCol("from_date", "From"), dateCol("to_date", "To"), numCol("presents", "Presents", 1),
+    numCol("ot_hours", "OT hrs", 1), moneyCol("earned", "Earned"), moneyCol("advance", "Advance"), moneyCol("loan", "Loan"), moneyCol("net", "Net paid")],
+  searchFields: ["employee_name", "employee_code", "employee"],
+  dateField: "from_date",
+  dateLabel: "Period",
+  sort: { key: "from_date", dir: "desc" },
+  fields: [
+    sec("Employee"),
+    ro(link("employee", "Employee", "Employee")), ro(data("employee_name", "Employee Name")), ro(data("employee_code", "Employee Code")), ro(data("designation", "Designation")),
+    colBreak(),
+    ro(date("from_date", "From Date")), ro(date("to_date", "To Date")), ro(date("posting_date", "Sheet Date")), ro(int("legacy_doc_id", "Old Site Doc #")),
+    ro(link("salary_slip", "Salary Slip", "Salary Slip")), ro(link("payroll_entry", "Payroll Run", "Payroll Entry")),
+    sec("Attendance"),
+    ro(float("presents", "Presents")), ro(float("rest_days", "Rest Days")), colBreak(), ro(float("work_hours", "Work Hours")), ro(float("rest_hours", "Rest Hours")), ro(float("ot_hours", "Overtime Hours")),
+    sec("Pay"),
+    ro(currency("basic_salary", "Basic Salary")), ro(currency("earned", "Earned")), ro(currency("advance", "Advance Deducted")), ro(currency("loan", "Loan Deducted")),
+    ro(currency("deduction", "Other Deduction")), ro(currency("net_salary", "Net Salary")),
+    colBreak(),
+    ro(currency("ot", "Overtime Amount")), ro(currency("ot_advance", "Overtime Advance")), ro(currency("net_ot", "Net Overtime")), ro(currency("net", "Net Paid")),
+  ],
+};

@@ -78,7 +78,10 @@ def _pay(employee):
         return {"gross": flt(sum(s.gross_pay for s in slips) / len(slips), 2), "net": flt(sum(s.net_pay for s in slips) / len(slips), 2),
                 "basis": f"average of last {len(slips)} salary slip{'s' if len(slips) > 1 else ''}"}
     base = flt(frappe.db.get_value("Salary Structure Assignment", {"employee": employee, "docstatus": 1}, "base", order_by="from_date desc"))
-    return {"gross": base, "net": base, "basis": "salary structure base (no salary slips yet)" if base else "no salary data"}
+    if base:
+        return {"gross": base, "net": base, "basis": "salary structure base (no salary slips yet)"}
+    basic = flt(frappe.db.get_value("Employee", employee, "mm_basic_salary")) if frappe.get_meta("Employee").has_field("mm_basic_salary") else 0
+    return {"gross": basic, "net": basic, "basis": "basic salary on the employee record (no salary slips yet)" if basic else "no salary data"}
 
 
 def _outstanding(a):
@@ -237,10 +240,8 @@ def _component(company, advance_account):
         frappe.get_doc({"doctype": "Salary Component", "salary_component": name, "salary_component_abbr": "LR", "type": "Deduction",
                         "description": "Salary loan instalment (baogee_textile.loans)", "depends_on_payment_days": 0,
                         "accounts": [{"company": company, "account": advance_account}]}).insert(ignore_permissions=True)
-    elif advance_account and not frappe.db.exists("Salary Component Account", {"parent": name, "company": company}):
-        comp = frappe.get_doc("Salary Component", name)
-        comp.append("accounts", {"company": company, "account": advance_account})
-        comp.save(ignore_permissions=True)
+    else:
+        _ensure_component_account(name, company, advance_account)
     return name
 
 
@@ -254,6 +255,9 @@ def create_installments(advance: str) -> str | None:
     existing = frappe.db.get_value("Additional Salary", {"ref_doctype": "Employee Advance", "ref_docname": doc.name, "docstatus": 1}, "name")
     if existing:
         return existing
+    if not frappe.db.exists("Salary Structure Assignment", {"employee": doc.employee, "docstatus": 1}):
+        frappe.throw(_("{0} has no salary structure yet. Assign a salary structure (Payroll → Salary Structure Assignment), then set up the instalments.")
+                     .format(doc.employee_name), title=_("No salary structure"))
     months = cint(doc.mm_installment_months) or 1
     balance = _outstanding(doc)
     start = get_first_day(doc.mm_first_deduction or add_months(nowdate(), 1))
@@ -313,6 +317,20 @@ def fix_advance_account(company: str) -> str:
     frappe.db.set_value("Account", acc, "account_type", "Receivable")
     frappe.db.commit()
     return f"{acc}: set to Receivable"
+
+
+def fix_payroll_payable_account(company: str) -> str:
+    """HRMS needs the company's Payroll Payable account to be of type Payable (same rule: only while it has no entries)."""
+    acc = frappe.db.get_value("Company", company, "default_payroll_payable_account")
+    if not acc:
+        return f"{company}: no default Payroll Payable account set"
+    if frappe.db.get_value("Account", acc, "account_type") == "Payable":
+        return f"{acc}: already Payable"
+    if frappe.db.exists("GL Entry", {"account": acc}):
+        return f"{acc}: has ledger entries — change its type by hand after review"
+    frappe.db.set_value("Account", acc, "account_type", "Payable")
+    frappe.db.commit()
+    return f"{acc}: set to Payable"
 
 
 # ------------------------------------------------------------------ loan ledger + dashboard (React Salary Loans page)
@@ -427,3 +445,103 @@ def get_loan_ledger(company: str, scope: str = "loans", from_date: str | None = 
                    "debit": flt(sum(r["debit"] for r in rows), 2), "credit": flt(sum(r["credit"] for r in rows), 2)},
         "loans": loans,
     }
+
+
+def _ensure_component_account(component, company, account):
+    if account and not frappe.db.exists("Salary Component Account", {"parent": component, "company": company}):
+        comp = frappe.get_doc("Salary Component", component)
+        comp.append("accounts", {"company": company, "account": account})
+        comp.save(ignore_permissions=True)
+
+
+@frappe.whitelist()
+def recover_from_salary(advance: str, payroll_date: str | None = None, amount: float | None = None) -> str:
+    """Cash advance: deduct the unreturned balance (or `amount`) from one salary — a one-off Additional Salary
+    (component Advance Recovery) linked to the advance, so the payroll posting reduces its balance."""
+    doc = frappe.get_doc("Employee Advance", advance)
+    doc.check_permission("submit")
+    if doc.docstatus != 1 or flt(doc.paid_amount) <= 0:
+        frappe.throw(_("Only a submitted, paid advance can be recovered from salary."))
+    if doc.get("mm_is_loan"):
+        return create_installments(advance)
+    existing = frappe.db.get_value("Additional Salary", {"ref_doctype": "Employee Advance", "ref_docname": doc.name, "docstatus": 1}, "name")
+    if existing:
+        return existing
+    if not frappe.db.exists("Salary Structure Assignment", {"employee": doc.employee, "docstatus": 1}):
+        frappe.throw(_("{0} has no salary structure yet. Assign a salary structure first.").format(doc.employee_name), title=_("No salary structure"))
+    component = "Advance Recovery"
+    if not frappe.db.exists("Salary Component", component):
+        frappe.get_doc({"doctype": "Salary Component", "salary_component": component, "salary_component_abbr": "AR", "type": "Deduction",
+                        "depends_on_payment_days": 0}).insert(ignore_permissions=True)
+    _ensure_component_account(component, doc.company, doc.advance_account)
+    balance = _outstanding(doc)
+    add = frappe.get_doc({
+        "doctype": "Additional Salary", "employee": doc.employee, "company": doc.company, "currency": doc.currency,
+        "salary_component": component, "amount": flt(min(flt(amount) or balance, balance), 2),
+        "payroll_date": payroll_date or get_last_day(nowdate()), "overwrite_salary_structure_amount": 0,
+        "ref_doctype": "Employee Advance", "ref_docname": doc.name,
+    })
+    add.insert(ignore_permissions=True)
+    add.submit()
+    doc.add_comment("Comment", f"Recovery from salary: {fmt_money(add.amount, currency=doc.currency)} on {add.payroll_date} ({add.name})")
+    return add.name
+
+
+# ------------------------------------------------------------------ full-page advance form
+@frappe.whitelist()
+def pay_out(advance: str, mode_of_payment: str | None = None, posting_date: str | None = None,
+            reference_no: str | None = None, reference_date: str | None = None) -> dict:
+    """Pay a submitted advance in one step: a submitted Payment Entry for the unpaid amount. For a salary loan the
+    Payment Entry's on_submit (on_payment_submit) then sets up the monthly instalments."""
+    from hrms.overrides.employee_payment_entry import get_payment_entry_for_employee
+
+    doc = frappe.get_doc("Employee Advance", advance)
+    if doc.docstatus != 1:
+        frappe.throw(_("Submit the advance before paying it out."))
+    if flt(doc.paid_amount) >= flt(doc.advance_amount):
+        frappe.throw(_("This advance is already paid."))
+    if mode_of_payment and mode_of_payment != doc.mode_of_payment:
+        frappe.db.set_value("Employee Advance", doc.name, "mode_of_payment", mode_of_payment)
+    pe = get_payment_entry_for_employee("Employee Advance", doc.name)
+    if mode_of_payment:
+        pe.mode_of_payment = mode_of_payment
+        from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
+        acc = (get_bank_cash_account(mode_of_payment, doc.company) or {}).get("account")
+        if acc:
+            pe.paid_from = acc
+    pe.posting_date = posting_date or nowdate()
+    if pe.paid_from and frappe.get_cached_value("Account", pe.paid_from, "account_type") == "Bank":
+        pe.reference_no = reference_no or doc.name
+        pe.reference_date = reference_date or pe.posting_date
+    pe.insert()
+    pe.submit()
+    out = {"payment_entry": pe.name, "installments": None, "warning": None}
+    if doc.get("mm_is_loan"):
+        out["installments"] = frappe.db.get_value("Additional Salary", {"ref_doctype": "Employee Advance", "ref_docname": doc.name, "docstatus": 1}, "name")
+        if not out["installments"]:
+            if not frappe.db.exists("Salary Structure Assignment", {"employee": doc.employee, "docstatus": 1}):
+                out["warning"] = _("Paid. Instalments not set up yet: {0} has no salary structure. Assign one, then click Set up instalments.").format(doc.employee_name)
+            else:
+                out["warning"] = _("Paid. Instalments could not be set up — see the Error Log, then click Set up instalments.")
+    return out
+
+
+@frappe.whitelist()
+def get_loan_schedule(advance: str) -> dict:
+    """The instalment schedule of a salary loan, month by month: the planned instalment (from its recurring Additional
+    Salary, or from the loan's terms before it is paid) and what each salary slip actually deducted."""
+    doc = frappe.get_doc("Employee Advance", advance)
+    doc.check_permission("read")
+    add = frappe.db.get_value("Additional Salary", {"ref_doctype": "Employee Advance", "ref_docname": doc.name, "docstatus": 1},
+                              ["name", "amount", "from_date", "to_date", "payroll_date", "is_recurring", "salary_component"], as_dict=True)
+    deductions = []
+    if add:
+        deductions = frappe.db.sql("""select ss.name slip, ss.start_date, ss.end_date, ss.docstatus, sd.amount
+            from `tabSalary Detail` sd join `tabSalary Slip` ss on ss.name = sd.parent
+            where sd.parenttype = 'Salary Slip' and sd.additional_salary = %s and ss.docstatus < 2
+            order by ss.start_date""", add.name, as_dict=True)
+    payments = frappe.db.sql("""select pe.name, pe.posting_date, per.allocated_amount amount, pe.mode_of_payment
+        from `tabPayment Entry Reference` per join `tabPayment Entry` pe on pe.name = per.parent
+        where per.reference_doctype = 'Employee Advance' and per.reference_name = %s and pe.docstatus = 1
+        order by pe.posting_date""", doc.name, as_dict=True)
+    return {"additional_salary": add, "deductions": deductions, "payments": payments, "outstanding": _outstanding(doc)}

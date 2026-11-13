@@ -89,7 +89,8 @@ function DocListPageInner({ config }: { config: DocConfig }) {
     activeFlags.forEach((fl) => f.push(...fl.filters({ user: currentUser ?? undefined })));
     if (status && config.statusField) f.push([config.statusField, "=", status]);
     if (config.dateField && from) f.push([config.dateField, ">=", from]);
-    if (config.dateField && to) f.push([config.dateField, "<=", to]);
+    // "before the next day" so a Datetime field (e.g. Employee Checkin.time) includes the whole last day
+    if (config.dateField && to) f.push([config.dateField, "<", nextDay(to)]);
     Object.entries(extra).forEach(([field, value]) => value && f.push([field, "=", value]));
     return f;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -431,4 +432,11 @@ function FilterSelect({ value, onChange, options, optionsFrom }: { value: string
       ))}
     </Select>
   );
+}
+
+/** "2026-11-01" → "2026-11-02" (local calendar date, no time-zone shift). */
+function nextDay(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  const dt = new Date(y, m - 1, d + 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 }

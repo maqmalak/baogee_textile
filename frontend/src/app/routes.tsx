@@ -28,6 +28,8 @@ const PayrollSalarySlipDetailPage = lazy(() => import("@/pages/Payroll/SalarySli
 const HrDepartmentFormPage = lazy(() => import("@/pages/HR/DepartmentFormPage"));
 const HrDesignationFormPage = lazy(() => import("@/pages/HR/DesignationFormPage"));
 const HrEmployeeNewPage = lazy(() => import("@/pages/HR/EmployeeNewPage"));
+const HelpPage = lazy(() => import("@/pages/Help/HelpPage").then((m) => ({ default: m.HelpPage })));
+const HrEmployeeAdvanceFormPage = lazy(() => import("@/pages/HR/EmployeeAdvanceFormPage"));
 const HrDocPage = lazy(() => import("@/pages/HR/HrDocPage"));
 const HrShiftsOverviewPage = lazy(() => import("@/pages/HR/ShiftsOverviewPage"));
 const HrSetupPage = lazy(() => import("@/pages/HR/HRSetupPage"));
@@ -62,6 +64,7 @@ const HR_DOC_ROUTES: [string, import("@/pages/HR/HrDocPage").HrDocKey][] = [
   ["hr/separations", "separations"],
   ["hr/expense-claim-types", "expenseClaimTypes"],
   ["payroll/entries", "entries"],
+  ["payroll/old-salary-sheets", "legacySalary"],
   ["payroll/additional-salary", "additionalSalary"],
   ["payroll/periods", "periods"],
   ["payroll/income-tax-slabs", "taxSlabs"],
@@ -108,8 +111,11 @@ export function AppRoutes() {
         <Route path="hr/expense-claims/:name" element={<Suspense fallback={<FullPageLoader />}><HrDocPage which="expenseClaim" form /></Suspense>} />
         <Route path="hr/advances" element={<Suspense fallback={<FullPageLoader />}><HrEmployeeAdvancesPage /></Suspense>} />
         <Route path="hr/loans" element={<Suspense fallback={<FullPageLoader />}><HrSalaryLoansPage /></Suspense>} />
-        <Route path="hr/advances/:name" element={<Suspense fallback={<FullPageLoader />}><HrDocPage which="employeeAdvance" form /></Suspense>} />
+        <Route path="hr/advances/:name" element={<Suspense fallback={<FullPageLoader />}><HrEmployeeAdvanceFormPage /></Suspense>} />
         <Route path="hr/gratuity" element={<Suspense fallback={<FullPageLoader />}><HrGratuityPage /></Suspense>} />
+
+        <Route path="help" element={<Suspense fallback={<FullPageLoader />}><HelpPage /></Suspense>} />
+        <Route path="help/guides" element={<Suspense fallback={<FullPageLoader />}><HelpPage /></Suspense>} />
 
         {/* Payroll */}
         <Route path="payroll" element={<Suspense fallback={<FullPageLoader />}><PayrollHomePage /></Suspense>} />

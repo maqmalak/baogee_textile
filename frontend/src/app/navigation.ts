@@ -115,6 +115,7 @@ import {
   Wrench,
   FolderKanban,
   ListTodo,
+  History,
 } from "lucide-react";
 import { APPS, APP_GROUPS } from "./apps";
 
@@ -738,6 +739,7 @@ const ALL_APP_NAVIGATION: Record<string, NavGroup[]> = {
       items: [
         { label: "HR Setup", to: "/hr/setup", icon: ListChecks },
         { label: "HR Settings", to: "/hr/settings", icon: Sliders },
+      { label: "Help & guides", to: "/help", icon: LifeBuoy },
       ],
     },
   ],
@@ -753,6 +755,7 @@ const ALL_APP_NAVIGATION: Record<string, NavGroup[]> = {
         { label: "Payroll Entries", to: "/payroll/entries", icon: PlayCircle },
         { label: "Salary Slips", to: "/payroll/salary-slips", icon: Banknote },
         { label: "Additional Salary", to: "/payroll/additional-salary", icon: PlusCircle },
+      { label: "Old Salary Sheets", to: "/payroll/old-salary-sheets", icon: History },
         { label: "Salary Loans", to: "/hr/loans", icon: HandCoins },
         { label: "Incentives", to: "/payroll/incentives", icon: BadgeCheck },
         { label: "Retention Bonus", to: "/payroll/retention-bonus", icon: Award },
@@ -795,6 +798,7 @@ const ALL_APP_NAVIGATION: Record<string, NavGroup[]> = {
       items: [
         { label: "HR & Payroll Setup", to: "/hr/setup", icon: ListChecks },
         { label: "Payroll Settings", to: "/payroll/settings", icon: Sliders },
+      { label: "Help & guides", to: "/help", icon: LifeBuoy },
       ],
     },
   ],

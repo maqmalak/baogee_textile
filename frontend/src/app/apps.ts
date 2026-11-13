@@ -23,6 +23,7 @@ import {
   Workflow,
   FolderKanban,
   type LucideIcon,
+  Fingerprint,
 } from "lucide-react";
 
 export interface AppTile {
@@ -53,6 +54,8 @@ export interface AppTile {
    * `micromax`, so the school site shows no Production tile. Undefined = core ERPNext/Frappe, always shown.
    */
   apps?: string[];
+  /** `to` is a page outside this React app (served by the site, e.g. the Biometric Sync console): open with a full page load. */
+  external?: boolean;
   /**
    * Curated capability bullets (copied from the public website's module
    * catalogue, website-data.ts MODULES) shown under the tile's description.
@@ -250,6 +253,33 @@ const ALL_APPS: AppTile[] = [
     module: ["Payroll"],
     features: ["Salary structures", "Payroll runs", "Salary slips", "Components & deductions"],
   },
+  {
+    id: "help",
+    label: "Help & Guides",
+    tagline: "Manuals · Guides · Videos",
+    group: "People",
+    description: "User manuals for each role, printable step-by-step guides and short demo videos for HR and payroll.",
+    icon: LifeBuoy,
+    to: "/help",
+    colorClass: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+    hideOnLogin: true,
+    features: ["Role manuals", "PDF guides", "Demo videos", "Share links"],
+  },
+  {
+    id: "biometric",
+    label: "Biometric Sync",
+    tagline: "Machines · Punches · Display",
+    group: "People",
+    description: "Attendance machines (ZKTeco): dashboard, machine setup, punches, employee mapping, sync logs, statistics and the live gate display.",
+    icon: Fingerprint,
+    to: "/biometric",
+    external: true,
+    colorClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+    hideOnLogin: true,
+    apps: ["biometric_sync"],
+    roles: ["HR Manager", "HR User", "System Manager"],
+    features: ["Machines", "Punches", "Employee mapping", "Live display"],
+  },
   // ------------------------------------------------------------------ Customers & Collaboration
   {
     id: "crm",
@@ -376,5 +406,5 @@ const ALL_APPS: AppTile[] = [
 ];
 
 /** Baogee Textile runs only the HR and Payroll apps (plus settings and the user's account). */
-const BAOGEE_APPS = ["hr", "payroll", "settings", "account"];
+const BAOGEE_APPS = ["hr", "payroll", "biometric", "help", "settings", "account"];
 export const APPS: AppTile[] = ALL_APPS.filter((a) => BAOGEE_APPS.includes(a.id));

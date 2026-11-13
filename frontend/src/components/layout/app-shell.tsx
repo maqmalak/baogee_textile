@@ -19,7 +19,7 @@ import { SWITCH_KEY } from "./app-context";
  * launcher cards; inside an app it shows just that app's own nav.
  */
 /** Pages laid out on the full screen width (card grids that gain columns), not the 1400px reading width. */
-const WIDE_PAGES = [/^\/hr\/(departments|designations)(\/|$)/, /^\/hr\/employees\/.+/];
+const WIDE_PAGES = [/^\/help(\/|$)/, /^\/hr\/(departments|designations)(\/|$)/, /^\/hr\/advances\/.+/, /^\/hr\/employees\/.+/];
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);

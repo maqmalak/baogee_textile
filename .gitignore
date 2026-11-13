@@ -7,3 +7,10 @@ frontend/dist/
 frontend/*.tsbuildinfo
 frontend/.env.local
 frontend/.env.*.local
+
+# help videos: large, copied to each server by hand (scripts/help/README.md)
+baogee_textile/public/downloads/
+
+# React build output (made by `npm run build`; the installer builds it on the server)
+baogee_textile/public/frontend/
+baogee_textile/www/baogee.html

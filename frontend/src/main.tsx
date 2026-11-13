@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
+import { ROUTER_BASE } from "@/lib/base-path";
 import App from "@/app/App";
 import { applyInitialTheme } from "@/components/layout/theme-provider";
 import "@/styles/globals.css";
@@ -26,7 +27,7 @@ document.addEventListener("click", (e) => {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={ROUTER_BASE || undefined}>
       <App />
     </BrowserRouter>
   </React.StrictMode>,

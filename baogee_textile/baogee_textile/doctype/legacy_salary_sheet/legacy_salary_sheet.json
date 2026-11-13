@@ -1,0 +1,270 @@
+{
+ "doctype": "DocType",
+ "name": "Legacy Salary Sheet",
+ "module": "Baogee Textile",
+ "custom": 0,
+ "istable": 0,
+ "editable_grid": 0,
+ "autoname": "hash",
+ "naming_rule": "Random",
+ "title_field": "employee_name",
+ "sort_field": "from_date",
+ "sort_order": "DESC",
+ "description": "One employee's line on a half-monthly salary sheet from the old HR site (baogeetextile.pk), imported once for history.",
+ "fields": [
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "label": "Employee",
+   "options": "Employee",
+   "in_list_view": 1,
+   "search_index": 1,
+   "in_standard_filter": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "label": "Employee Name",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "employee_code",
+   "fieldtype": "Data",
+   "label": "Employee Code",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "designation",
+   "fieldtype": "Data",
+   "label": "Designation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_a",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date",
+   "in_list_view": 1,
+   "search_index": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "label": "Sheet Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "legacy_doc_id",
+   "fieldtype": "Int",
+   "label": "Old Site Doc #",
+   "search_index": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "salary_slip",
+   "fieldtype": "Link",
+   "label": "Salary Slip",
+   "options": "Salary Slip",
+   "read_only": 1,
+   "in_list_view": 0
+  },
+  {
+   "fieldname": "payroll_entry",
+   "fieldtype": "Link",
+   "label": "Payroll Run",
+   "options": "Payroll Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "attendance_section",
+   "fieldtype": "Section Break",
+   "label": "Attendance"
+  },
+  {
+   "fieldname": "presents",
+   "fieldtype": "Float",
+   "label": "Presents",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "rest_days",
+   "fieldtype": "Float",
+   "label": "Rest Days",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_b",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "work_hours",
+   "fieldtype": "Float",
+   "label": "Work Hours",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rest_hours",
+   "fieldtype": "Float",
+   "label": "Rest Hours",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ot_hours",
+   "fieldtype": "Float",
+   "label": "Overtime Hours",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pay_section",
+   "fieldtype": "Section Break",
+   "label": "Pay"
+  },
+  {
+   "fieldname": "basic_salary",
+   "fieldtype": "Currency",
+   "label": "Basic Salary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "earned",
+   "fieldtype": "Currency",
+   "label": "Earned",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "advance",
+   "fieldtype": "Currency",
+   "label": "Advance Deducted",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "loan",
+   "fieldtype": "Currency",
+   "label": "Loan Deducted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "deduction",
+   "fieldtype": "Currency",
+   "label": "Other Deduction",
+   "read_only": 1
+  },
+  {
+   "fieldname": "net_salary",
+   "fieldtype": "Currency",
+   "label": "Net Salary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_c",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ot",
+   "fieldtype": "Currency",
+   "label": "Overtime Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ot_advance",
+   "fieldtype": "Currency",
+   "label": "Overtime Advance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "net_ot",
+   "fieldtype": "Currency",
+   "label": "Net Overtime",
+   "read_only": 1
+  },
+  {
+   "fieldname": "net",
+   "fieldtype": "Currency",
+   "label": "Net Paid",
+   "in_list_view": 1,
+   "read_only": 1
+  }
+ ],
+ "field_order": [
+  "employee",
+  "employee_name",
+  "employee_code",
+  "designation",
+  "column_break_a",
+  "from_date",
+  "to_date",
+  "posting_date",
+  "legacy_doc_id",
+  "salary_slip",
+  "payroll_entry",
+  "attendance_section",
+  "presents",
+  "rest_days",
+  "column_break_b",
+  "work_hours",
+  "rest_hours",
+  "ot_hours",
+  "pay_section",
+  "basic_salary",
+  "earned",
+  "advance",
+  "loan",
+  "deduction",
+  "net_salary",
+  "column_break_c",
+  "ot",
+  "ot_advance",
+  "net_ot",
+  "net"
+ ],
+ "in_create": 1,
+ "track_changes": 0,
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "export": 1,
+   "report": 1,
+   "print": 1,
+   "delete": 1
+  },
+  {
+   "role": "HR Manager",
+   "read": 1,
+   "export": 1,
+   "report": 1,
+   "print": 1,
+   "delete": 0
+  },
+  {
+   "role": "HR User",
+   "read": 1,
+   "export": 1,
+   "report": 1,
+   "print": 1,
+   "delete": 0
+  }
+ ],
+ "modified": "2026-11-04 20:00:00.000000",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "creation": "2026-11-04 20:00:00.000000",
+ "engine": "InnoDB"
+}

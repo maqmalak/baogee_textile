@@ -150,7 +150,7 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
       seen.add(to);
       out.push({ label, to, where });
     };
-    APPS.forEach((a) => add(a.label, a.to, "App"));
+    APPS.filter((a) => !a.external).forEach((a) => add(a.label, a.to, "App"));
     Object.entries(APP_NAVIGATION).forEach(([seg, groups]) => {
       const app = APPS.find((a) => a.to.replace(/^\//, "").split("/")[0] === seg)?.label ?? seg;
       groups.forEach((g) => g.items.forEach((i) => add(i.label, i.to, g.title && g.title !== app ? `${app} · ${g.title}` : app)));

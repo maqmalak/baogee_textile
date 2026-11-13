@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useFrappeGetDocList, useFrappeEventListener, useFrappeUpdateDoc } from "frappe-react-sdk";
 import { useAuth } from "./useAuth";
+import { useInstalledApps } from "./useInstalledApps";
 
 export interface CrmNotificationDoc {
   name: string;
@@ -32,11 +33,16 @@ export interface CrmNotificationDoc {
  * guaranteed (proxying, reconnects, tab left in the background), so a
  * `refreshInterval` poll is the reliable floor under it: worst case the bell
  * count is `POLL_INTERVAL_MS` stale, never stuck indefinitely.
+ *
+ * Only queried where the crm app is installed: on other sites (e.g. baogee) the doctype doesn't exist and every
+ * poll would 404.
  */
 const POLL_INTERVAL_MS = 30_000;
 
 export function useCrmNotifications() {
   const { currentUser } = useAuth();
+  const { apps } = useInstalledApps();
+  const enabled = Boolean(currentUser) && apps.has("crm");
   const { data, error, isLoading, mutate } = useFrappeGetDocList<CrmNotificationDoc>(
     "CRM Notification",
     {
@@ -45,12 +51,12 @@ export function useCrmNotifications() {
       orderBy: { field: "creation", order: "desc" },
       limit: 30,
     },
-    currentUser ? `micromax.crm.notifications.${currentUser}` : null,
+    enabled ? `micromax.crm.notifications.${currentUser}` : null,
     { refreshInterval: POLL_INTERVAL_MS },
   );
 
   useFrappeEventListener("crm_notification", () => {
-    void mutate();
+    if (enabled) void mutate();
   });
 
   const { updateDoc } = useFrappeUpdateDoc();
@@ -63,7 +69,7 @@ export function useCrmNotifications() {
     [data, updateDoc, mutate],
   );
 
-  const notifications = data ?? [];
+  const notifications = enabled ? (data ?? []) : [];
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return { notifications, unreadCount, isLoading, error, markRead, mutate };

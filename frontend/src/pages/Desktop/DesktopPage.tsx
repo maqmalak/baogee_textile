@@ -32,15 +32,17 @@ function greeting() {
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
-function IconTile({ to, icon, hue, label, sub }: { to: string; icon: LucideIcon; hue: string; label: string; sub?: string }) {
-  return (
-    <Link to={to} title={label}
-      className="group flex w-full flex-col items-center gap-1.5 rounded-2xl p-2 text-center outline-none transition focus-visible:ring-2 focus-visible:ring-primary">
+function IconTile({ to, icon, hue, label, sub, external }: { to: string; icon: LucideIcon; hue: string; label: string; sub?: string; external?: boolean }) {
+  const cls = "group flex w-full flex-col items-center gap-1.5 rounded-2xl p-2 text-center outline-none transition focus-visible:ring-2 focus-visible:ring-primary";
+  const body = (
+    <>
       <GlossyIcon icon={icon} hue={hue} />
       <span className="w-full truncate text-[13px] font-semibold leading-tight">{label}</span>
       {sub && <span className="-mt-1 w-full truncate text-[10px] text-muted-foreground">{sub}</span>}
-    </Link>
+    </>
   );
+  // a page served by the site itself (e.g. the Biometric Sync console) needs a full page load
+  return external ? <a href={to} title={label} className={cls}>{body}</a> : <Link to={to} title={label} className={cls}>{body}</Link>;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -72,7 +74,7 @@ export function DesktopPage() {
       {groups.map((g) => (
         <Section key={g.title} title={g.title}>
           {g.apps.map((app) => (
-            <IconTile key={app.id} to={app.to} icon={app.icon} hue={hueOf(app.colorClass)} label={app.label} sub={app.tagline} />
+            <IconTile key={app.id} to={app.to} icon={app.icon} hue={hueOf(app.colorClass)} label={app.label} sub={app.tagline} external={app.external} />
           ))}
         </Section>
       ))}

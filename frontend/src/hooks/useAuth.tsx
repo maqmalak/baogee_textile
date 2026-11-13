@@ -1,4 +1,5 @@
 import * as React from "react";
+import { ROUTER_BASE } from "@/lib/base-path";
 import { useFrappeAuth, useFrappeGetCall, useFrappeGetDoc } from "frappe-react-sdk";
 import { refreshCSRFToken } from "@/services/frappe";
 import type { FrappeUser } from "@/types/frappe";
@@ -146,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // `location.assign` sidesteps that entirely and, as a bonus, hard-resets
     // every in-memory cache (SWR, component state) rather than leaving stale
     // authenticated data sitting behind the login screen.
-    window.location.assign("/login");
+    window.location.assign(`${ROUTER_BASE}/login`);
   }, [updateCurrentUser, getUserCookie]);
 
   const hasRole = React.useCallback(

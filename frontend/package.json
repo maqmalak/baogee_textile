@@ -6,7 +6,7 @@
   "description": "Baogee Textile: HR and Payroll React app (forked from the MicroMax erpnext-react frontend)",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/copy-html.mjs",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives"
   },

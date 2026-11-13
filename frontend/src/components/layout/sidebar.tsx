@@ -111,6 +111,12 @@ function NavLinks({
                   <span className="truncate">{item.label}</span>
                   <ExternalLink className="ml-auto h-3 w-3 shrink-0 opacity-50" />
                 </a>
+              ) : (item.to.startsWith("/assets/") || item.to === "/biometric") ? (
+                // a page served by the site outside this React app (e.g. the Biometric Sync console): full page load
+                <a key={item.to} href={item.to} onClick={() => { markAppSwitch(); onNavigate?.(); }} className={linkClass(item.to)({ isActive: false })}>
+                  {Icon && <Icon className="h-4 w-4 shrink-0" />}
+                  <span className="truncate">{item.label}</span>
+                </a>
               ) : (
               <NavLink key={item.to} to={item.to} end={isAppRoot(item.to)} onClick={() => { markAppSwitch(); onNavigate?.(); }} className={linkClass(item.to)}>
                 {Icon && <Icon className="h-4 w-4 shrink-0" />}

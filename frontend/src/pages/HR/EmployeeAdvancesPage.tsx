@@ -52,7 +52,7 @@ export default function EmployeeAdvancesPage() {
   const config: CrmManagementConfig<EmployeeAdvanceRow> = useMemo(
     () => ({
       title: "Employee Advances",
-      subtitle: "Cash advances given to employees",
+      subtitle: "Cash advances and salary loans — recovered from salary",
       icon: <Wallet className="h-5 w-5" />,
       doctype: "Employee Advance",
       fields: ["name", "employee", "employee_name", "posting_date", "company", "currency", "purpose", "advance_amount", "paid_amount", "pending_amount", "status", "mm_is_loan", "mm_installment_months", "mm_monthly_installment", "return_amount"],
@@ -69,6 +69,8 @@ export default function EmployeeAdvancesPage() {
         { fieldname: "mm_guarantor", label: "Guarantor", fieldtype: "Link", options: "Employee" },
       ],
       onOpen: (r) => navigate(`/hr/advances/${encodeURIComponent(r.name)}`),
+      onEdit: (r) => navigate(`/hr/advances/${encodeURIComponent(r.name)}`),
+      onCreate: () => navigate(`/hr/advances/new${employee ? `?employee=${encodeURIComponent(employee)}` : ""}`),
       defaults: { company, posting_date: todayISO(), status: "Draft", employee: employee ?? undefined },
       kanbanField: "status",
       kanbanColumns: STATUSES.map((s) => ({ value: s })),
@@ -85,7 +87,7 @@ export default function EmployeeAdvancesPage() {
       rowSubtitle: (r) => r.purpose,
       emptyTitle: "No employee advances",
       emptyDescription: "Employee cash advances will appear here",
-      newLabel: "New Employee Advance",
+      newLabel: "New advance / loan",
     }),
     [company, employee, navigate],
   );

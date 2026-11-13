@@ -26,7 +26,7 @@ function ownHostname(): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const target = env.VITE_PROXY_TARGET || "http://127.0.0.1:8009";
   const proxy = {
@@ -37,6 +37,8 @@ export default defineConfig(({ mode }) => {
     secure: false,
   };
   return {
+    // production: built into baogee_textile/public/frontend, served by Frappe from /assets/…; dev server: from /
+    base: command === "build" ? "/assets/baogee_textile/frontend/" : "/",
     plugins: [react(), ownHostname()],
     resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
     server: {
@@ -53,12 +55,16 @@ export default defineConfig(({ mode }) => {
         "/app": proxy,
         "/desk": proxy,
         "/printview": proxy,
+        // Biometric Sync console's gate display (iframe)
+        "/checkin-display": proxy,
+        "/biometric": proxy,
         "/socket.io": { target: env.VITE_SOCKETIO_TARGET || "http://127.0.0.1:9000", ws: true, changeOrigin: false,
           headers: { "X-Frappe-Site-Name": SITE } },
       },
     },
     build: {
-      outDir: "dist",
+      outDir: "../baogee_textile/public/frontend",
+      emptyOutDir: true,
       sourcemap: false,
       chunkSizeWarningLimit: 1500,
       rollupOptions: {

@@ -107,6 +107,23 @@ def _build_custom_fields():
     add("Employee", "mm_basic_salary", "Basic Salary", "Currency", None, "ctc")
     add("Employee", "mm_placeholder_data", "Gender / date of birth / joining date not confirmed", "Check", None, "date_of_joining",
         default="0", description="Set by the masters import, which had no gender, date of birth or joining date. Untick once corrected.")
+    # the old HR site (baogeetextile.pk), imported once by baogee_textile.importers.legacy
+    add("Employee", "mm_father_name", "Father's Name", "Data", None, "mm_urdu_name")
+    add("Employee", "mm_legacy_id", "Old HR Site ID", "Int", None, "mm_placeholder_data", read_only=1, no_copy=1,
+        description="Employee id on the old HR site (baogeetextile.pk); links its attendance and salary history.")
+    add("Employee", "mm_rest_day", "Rest Day", "Data", None, "mm_legacy_id")
+    add("Employee", "mm_employment_nature", "Employment Nature", "Data", None, "mm_rest_day")
+    add("Employee", "mm_import_remarks", "Import Remarks", "Small Text", None, "mm_employment_nature", read_only=1, no_copy=1,
+        description="What the old-site import filled in or assumed (missing joining / leaving / birth dates).")
+    add("Employee", "mm_father_name_urdu", "Father's Name (Urdu)", "Data", None, "mm_father_name")
+    add("Employee", "mm_gross_salary", "Gross Salary", "Currency", None, "mm_basic_salary")
+    add("Employee", "mm_city", "City", "Data", None, "current_address")
+    add("Employee", "mm_province", "Province", "Data", None, "mm_city")
+    add("Employee", "mm_qualification", "Qualification", "Data", None, "mm_import_remarks")
+    add("Employee", "mm_experience", "Experience", "Data", None, "mm_qualification")
+    add("Employee", "mm_old_site_remarks", "Old Site Remarks", "Data", None, "mm_experience", read_only=1)
+    add("Salary Slip", "mm_legacy_sheet", "Old Salary Sheet", "Link", "Legacy Salary Sheet", "payroll_entry", read_only=1, no_copy=1,
+        description="Half-monthly or monthly sheet from the old HR site this slip was imported from.")
 
     return data
 
