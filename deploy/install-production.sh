@@ -2,7 +2,7 @@
 # =====================================================================================================================
 #  Baogee Textile (HR & Payroll + Biometric Sync) — production install on Ubuntu 24.04 LTS
 #
-#  Frappe v16.34.0 · ERPNext v16.35.0 · HRMS v16.19.0 · biometric_sync (+ local patch) · baogee_textile
+#  Frappe v16.34.0 · ERPNext v16.35.0 · HRMS v16.19.0 · biometric_sync (maqmalak fork) · baogee_textile
 #  The versions are the ones the data was made with, so a restored database matches the code.
 #
 #  Run as the Linux user that will own the bench (it must have sudo), NOT as root:
@@ -44,8 +44,8 @@ ERPNEXT_BRANCH="${ERPNEXT_BRANCH:-v16.35.0}"
 HRMS_REPO="${HRMS_REPO:-https://github.com/frappe/hrms}"
 HRMS_BRANCH="${HRMS_BRANCH:-v16.19.0}"
 HRMS_REF="${HRMS_REF:-7e0fba4bf11a63ac7b21a717610e235310815c1a}"          # v16.19.0
-BIOMETRIC_REPO="${BIOMETRIC_REPO:-https://github.com/SafdarAliGit/biometric_sync}"
-BIOMETRIC_REF="${BIOMETRIC_REF:-78deacc}"                                 # the local patch is made against it
+BIOMETRIC_REPO="${BIOMETRIC_REPO:-https://github.com/maqmalak/biometric_sync.git}"   # fork with the console, display, settings
+BIOMETRIC_BRANCH="${BIOMETRIC_BRANCH:-main}"
 APP_REPO="${APP_REPO:-https://github.com/maqmalak/baogee_textile.git}"   # baogee_textile
 APP_BRANCH="${APP_BRANCH:-main}"
 RESTORE_DIR="${RESTORE_DIR:-}"               # a folder made by export-data.sh: restore its data into the new site
@@ -128,7 +128,6 @@ if [ -n "$RESTORE_DIR" ]; then
 	ls "$RESTORE_DIR"/*-database.sql* >/dev/null 2>&1 || die "No *-database.sql.gz in ${RESTORE_DIR}."
 	info "restore from ${RESTORE_DIR}: $(ls "$RESTORE_DIR" | tr '\n' ' ')"
 fi
-[ -f "$BIOMETRIC_PATCH" ] || die "patches/biometric_sync-local.patch is missing next to this script."
 GIT_TERMINAL_PROMPT=0 git ls-remote "$APP_REPO" HEAD >/dev/null 2>&1 ||
 	warn "Cannot reach $APP_REPO yet (private repository? git not installed?) — checked again when the app is fetched."
 info "user ${FRAPPE_USER} · bench ${BENCH_DIR} · site ${SITE} · Frappe ${FRAPPE_BRANCH} · ${ARCH}"
@@ -266,7 +265,7 @@ get_app() {  # get_app NAME REPO BRANCH [COMMIT]
 		warn "apps/$1 is left over from a failed get-app (not in sites/apps.txt) — fetching it again"
 		rm -rf "apps/$1"
 	fi
-	if [ -d "apps/$1" ] && [ "$2" = "$APP_REPO" ]; then   # our app: take the latest pushed code on every run
+	if [ -d "apps/$1" ] && { [ "$2" = "$APP_REPO" ] || [ "$2" = "$BIOMETRIC_REPO" ]; }; then   # our apps: latest pushed code on every run
 		git -C "apps/$1" pull -q --ff-only "$2" "$3" && info "$1 updated to $(git -C "apps/$1" rev-parse --short HEAD)"
 	fi
 	if [ -d "apps/$1" ]; then
@@ -289,17 +288,18 @@ get_app() {  # get_app NAME REPO BRANCH [COMMIT]
 }
 get_app erpnext https://github.com/frappe/erpnext "$ERPNEXT_BRANCH"
 get_app hrms "$HRMS_REPO" "$HRMS_BRANCH" "$HRMS_REF"
-get_app biometric_sync "$BIOMETRIC_REPO" main "$BIOMETRIC_REF"
+get_app biometric_sync "$BIOMETRIC_REPO" "$BIOMETRIC_BRANCH"
 get_app baogee_textile "$APP_REPO" "$APP_BRANCH"
 
-# Local changes to biometric_sync: Biometric Sync console (React), console API, Check-in Display, extra settings.
-if git -C apps/biometric_sync apply --reverse --check "$BIOMETRIC_PATCH" 2>/dev/null; then
-	info "biometric_sync local patch already applied"
-elif git -C apps/biometric_sync apply --check "$BIOMETRIC_PATCH" 2>/dev/null; then
+# The Biometric Sync console (React), its API, the Check-in Display and the extra settings come with the fork
+# (BIOMETRIC_REPO). Fetched from the original repository instead? Then the patch below adds them.
+if [ -f apps/biometric_sync/biometric_sync/console_api.py ]; then
+	info "biometric_sync has the console (fork)"
+elif [ -f "$BIOMETRIC_PATCH" ] && git -C apps/biometric_sync apply --check "$BIOMETRIC_PATCH" 2>/dev/null; then
 	git -C apps/biometric_sync apply "$BIOMETRIC_PATCH"
-	info "biometric_sync local patch applied"
+	info "biometric_sync: console added from patches/biometric_sync-local.patch"
 else
-	die "biometric_sync local patch does not apply to $(git -C apps/biometric_sync rev-parse --short HEAD) — the console, display and settings would be missing (see $BIOMETRIC_PATCH)"
+	die "apps/biometric_sync has no console and the patch does not apply — use BIOMETRIC_REPO=https://github.com/maqmalak/biometric_sync.git"
 fi
 for a in frappe "${APPS[@]}"; do info "$a  $(git -C "apps/$a" describe --tags --always 2>/dev/null)"; done
 

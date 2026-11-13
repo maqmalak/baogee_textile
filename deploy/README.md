@@ -17,18 +17,13 @@ One Frappe site serves everything. Desk and the React apps share the login, the 
 | `install-production.sh` | production server (Ubuntu 24.04) | Installs everything, builds the React apps, restores the data, and sets up nginx, supervisor, SSL, the firewall and the nightly backup. |
 | `set-passwords.sh` | production server | Gives every user one password (asked when run, never stored). |
 | `backup.sh` | production server (cron) | Nightly backup with files, kept 14 days; copies off the server when `REMOTE` is set. |
-| `patches/biometric_sync-local.patch` | used by the installer | The local changes to biometric_sync (upstream commit `78deacc`): the Biometric Sync console, its API, the Check-in Display and the extra settings. |
+| `patches/biometric_sync-local.patch` | fallback only | The same changes as the fork, for a server that fetches the original biometric_sync (`BIOMETRIC_REPO=https://github.com/SafdarAliGit/biometric_sync`). |
 
 ## Steps
 
 1. **Commit and push the app** so the server can fetch it: `git -C apps/baogee_textile push origin main`.
    If the repository is private, give the server read access (a deploy key, or `APP_REPO=https://<token>@github.com/...`).
-2. **Refresh the biometric_sync patch** if biometric_sync changed since (run from the bench):
-   ```bash
-   cd apps/biometric_sync && IDX=$(mktemp) && cp .git/index $IDX && \
-   GIT_INDEX_FILE=$IDX git add -A -- . ':!frontend/node_modules' ':!biometric_sync/public/console' ':!**/__pycache__' && \
-   GIT_INDEX_FILE=$IDX git diff --cached --binary 78deacc > ../baogee_textile/deploy/patches/biometric_sync-local.patch; rm -f $IDX
-   ```
+2. **Push biometric_sync too** (the fork with the console): `git -C apps/biometric_sync push origin main`.
 3. **DNS:** `<site>` → `169.58.20.21` (Cloudflare proxy is fine; set it to *DNS only* if the SSL step fails).
 4. **Export the data** (development machine): `bash apps/baogee_textile/deploy/export-data.sh`
 5. **Copy to the server** with the `rsync` command it prints, and copy this `deploy` folder too (or clone the repo).
@@ -43,8 +38,8 @@ One Frappe site serves everything. Desk and the React apps share the login, the 
 8. **Delete the data folder** from both machines; it holds the site's encryption key and stored secrets.
 
 Options (environment variables): `SITE`, `EXTRA_DOMAINS`, `APT_UPGRADE=0` (server already in use), `SSL=0`, `BENCH_NAME`,
-`ENABLE_UFW=0`, and the pinned versions (`FRAPPE_BRANCH`, `ERPNEXT_BRANCH`, `HRMS_BRANCH`/`HRMS_REF`, `BIOMETRIC_REF`).
-The script can be re-run; it pulls the latest pushed baogee_textile and rebuilds the React apps every time.
+`ENABLE_UFW=0`, and the pinned versions (`FRAPPE_BRANCH`, `ERPNEXT_BRANCH`, `HRMS_BRANCH`/`HRMS_REF`), `BIOMETRIC_REPO`/`BIOMETRIC_BRANCH`.
+The script can be re-run; it pulls the latest pushed baogee_textile and biometric_sync and rebuilds the React apps every time.
 
 Passwords (MariaDB root, and this site's BAOGEE_ADMIN_PASSWORD) are generated on the server into `~/.frappe-install-secrets`.
 
