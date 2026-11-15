@@ -56,3 +56,39 @@ def switch_machines_to_frappe(sync_from: str | None = None):
 	frappe.db.set_single_value("Biometric Sync Settings", "enable_scheduled_sync", 1)
 	frappe.db.commit()
 	return f"Auto Sync on for {len(names)} machine(s) from {start}: {', '.join(names)}"
+
+
+def relabel_checkins(from_date: str, to_date: str | None = None, dry_run: int = 0):
+	"""The gate machines send one key for every punch (MAIN_GATE always 3, MAIN_GATE2 always 0), so every check-in was
+	stored as IN. Relabel by order instead: per employee and day, 1st punch IN, 2nd OUT, 3rd IN… (the same rule as the
+	machines' "Alternate IN/OUT" mode). Attendance is not affected: the shifts already read punches alternately."""
+	from frappe.utils import cint, getdate
+
+	to_date = to_date or str(now_datetime().date())
+	rows = frappe.db.sql("""select name, employee, date(time) d, log_type from `tabEmployee Checkin`
+		where time >= %s and time < %s + interval 1 day and employee is not null order by employee, time, name""",
+		(getdate(from_date), getdate(to_date)), as_dict=True)
+	changed, seen = 0, {}
+	for r in rows:
+		key = (r.employee, r.d)
+		n = seen.get(key, 0)
+		seen[key] = n + 1
+		want = "IN" if n % 2 == 0 else "OUT"
+		if r.log_type != want:
+			changed += 1
+			if not cint(dry_run):
+				frappe.db.set_value("Employee Checkin", r.name, "log_type", want, update_modified=False)
+				frappe.db.sql("update `tabBiometric Log` set log_type = %s where employee_checkin = %s", (want, r.name))
+	if not cint(dry_run):
+		frappe.db.commit()
+	return f"{len(rows)} check-ins from {from_date} to {to_date}: {changed} relabelled{' (dry run)' if cint(dry_run) else ''}"
+
+
+def set_machines_alternate():
+	"""Both gate machines: log type by order (1st IN, 2nd OUT…), since nobody presses the IN/OUT keys."""
+	names = frappe.get_all("Biometric Device", pluck="name")
+	for n in names:
+		frappe.db.set_value("Biometric Device", n, "log_type_mode", "Alternate IN/OUT")
+	frappe.db.set_single_value("Biometric Sync Settings", "default_log_type_mode", "Alternate IN/OUT")
+	frappe.db.commit()
+	return f"Alternate IN/OUT on {len(names)} machine(s)"
