@@ -104,9 +104,12 @@ def _active_headcount(company=None, department=None, branch=None):
 
 
 # ----------------------------------------------------------------------------- checked in, not marked yet
-def _pending_checkins(f, t, company=None, department=None, branch=None, employee=None, search=None):
+def _pending_checkins(f, t, company=None, department=None, branch=None, employee=None, search=None, include_provisional=False):
     """Employees with check-ins on a day that has no Attendance yet (HRMS marks attendance after the shift ends),
-    one row per employee and day: first punch, last punch, number of punches. Nothing is created."""
+    one row per employee and day: first punch, last punch, number of punches. Nothing is created.
+    `include_provisional` also keeps days whose attendance is only the provisional one from the first punch
+    (baogee_textile.attendance), for the live page."""
+    prov = " and ifnull(a.mm_provisional, 0) = 0" if include_provisional else ""
     cond, p = "", {"f": f, "t": t}
     for field, value in (("company", company), ("department", department), ("branch", branch)):
         if value:
@@ -124,7 +127,7 @@ def _pending_checkins(f, t, company=None, department=None, branch=None, employee
         from `tabEmployee Checkin` c left join `tabEmployee` e on e.name = c.employee
         where c.employee is not null and c.time >= %(f)s and c.time < date_add(%(t)s, interval 1 day) {cond}
             and not exists (select 1 from `tabAttendance` a where a.employee = c.employee
-                and a.attendance_date = date(c.time) and a.docstatus < 2)
+                and a.attendance_date = date(c.time) and a.docstatus < 2{prov})
         group by c.employee, date(c.time)""", p, as_dict=True)
 
 
@@ -143,7 +146,7 @@ def attendance_live(date=None, company=None, department=None, branch=None, searc
     """Who has checked in on `date` (default today) and is not marked yet: first in, last punch, in or out now."""
     _check("Attendance")
     d = getdate(date)
-    rows = [_pending_row(r) for r in _pending_checkins(d, d, company, department, branch, None, search)]
+    rows = [_pending_row(r) for r in _pending_checkins(d, d, company, department, branch, None, search, include_provisional=True)]
     rows.sort(key=lambda r: r.in_time, reverse=True)
     return {"date": str(d), "rows": rows, "in_now": sum(1 for r in rows if r.now_in), "total": len(rows)}
 

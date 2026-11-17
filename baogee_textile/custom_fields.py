@@ -68,6 +68,11 @@ def _build_custom_fields():
     add("HR Settings", "mm_loan_component", "Recovery Salary Component", "Link", "Salary Component", "mm_loan_guarantor_max_guarantees",
         description="Deduction used for instalments (default: Loan Recovery, created automatically).")
 
+    # ---------------------------------------------------------- Attendance marked at the first punch (baogee_textile.attendance)
+    add("Attendance", "mm_provisional", "Provisional (from first check-in)", "Check", None, "early_exit", default="0",
+        read_only=1, no_copy=1, in_standard_filter=1,
+        description="Marked Present at the employee's first punch; replaced by the final attendance when the shift ends.")
+
     # ---------------------------------------------------------- Branch: what kind of site it is (icon on the Branches page / map)
     add("Branch", "mm_branch_type", "Branch Type", "Select", "\nHead Office\nFactory\nWarehouse\nShop / Outlet\nOffice",
         "branch", description="Shown as the branch's icon in the list and on the map.")

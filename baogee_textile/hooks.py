@@ -22,6 +22,13 @@ doc_events = {
 	"Payment Entry": {
 		"on_submit": "baogee_textile.loans.on_payment_submit",
 	},
+	# Attendance at the first punch, out time on each OUT punch, final record at shift end (baogee_textile.attendance)
+	"Employee Checkin": {
+		"after_insert": "baogee_textile.attendance.on_checkin",
+	},
+	"Attendance": {
+		"before_insert": "baogee_textile.attendance.adopt_provisional",
+	},
 }
 
 # Attendance from punches every hour (baogee_textile.attendance)

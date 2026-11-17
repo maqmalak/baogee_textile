@@ -106,3 +106,35 @@ def setup(dry_run=0):
 	if not cint(dry_run):
 		frappe.db.commit()
 	return {"moved_10_hours_to_day": moved, **result}
+
+
+def assign_default_shifts(start_date: str = "2026-11-01", dry_run: int = 0):
+	"""An active Shift Assignment for every active employee who has none, on the shift already set as their default
+	shift (HR → Shifts counts assignments, so without one everybody shows as "No shift assigned"). Attendance does not
+	change: HRMS falls back to the default shift when there is no assignment. Starts on `start_date`, or the joining
+	date if later. Safe to run again (e.g. for new joiners)."""
+	rows = frappe.db.sql("""select e.name, e.company, e.default_shift, e.date_of_joining from tabEmployee e
+		where e.status = 'Active' and ifnull(e.default_shift, '') != '' and not exists (select 1 from `tabShift Assignment` sa
+			where sa.employee = e.name and sa.docstatus = 1 and sa.status = 'Active'
+			and (sa.end_date is null or sa.end_date >= curdate()))""", as_dict=True)
+	made, failed = {}, []
+	for r in rows:
+		start = max(getdate(start_date), getdate(r.date_of_joining)) if r.date_of_joining else getdate(start_date)
+		if cint(dry_run):
+			made[r.default_shift] = made.get(r.default_shift, 0) + 1
+			continue
+		try:
+			frappe.db.savepoint("shift_assignment")
+			sa = frappe.get_doc({"doctype": "Shift Assignment", "employee": r.name, "company": r.company,
+				"shift_type": r.default_shift, "start_date": start, "status": "Active"})
+			sa.flags.ignore_permissions = True
+			sa.insert()
+			sa.submit()
+			made[r.default_shift] = made.get(r.default_shift, 0) + 1
+		except Exception as e:
+			frappe.db.rollback(save_point="shift_assignment")
+			frappe.clear_messages()
+			failed.append(f"{r.name}: {frappe.utils.strip_html(str(e))[:120]}")
+	if not cint(dry_run):
+		frappe.db.commit()
+	return {"assigned": made, "failed": failed[:20], "failed_count": len(failed), "dry_run": cint(dry_run)}
