@@ -103,6 +103,82 @@ def _active_headcount(company=None, department=None, branch=None):
     return len(_active_employees(company, department, branch))
 
 
+# ----------------------------------------------------------------------------- checked in, not marked yet
+def _pending_checkins(f, t, company=None, department=None, branch=None, employee=None, search=None):
+    """Employees with check-ins on a day that has no Attendance yet (HRMS marks attendance after the shift ends),
+    one row per employee and day: first punch, last punch, number of punches. Nothing is created."""
+    cond, p = "", {"f": f, "t": t}
+    for field, value in (("company", company), ("department", department), ("branch", branch)):
+        if value:
+            cond += f" and e.{field} = %({field})s"
+            p[field] = value
+    if employee:
+        cond += " and c.employee = %(employee)s"
+        p["employee"] = employee
+    if search:
+        cond += " and (c.employee like %(search)s or c.employee_name like %(search)s)"
+        p["search"] = f"%{search}%"
+    return frappe.db.sql(f"""select c.employee, max(c.employee_name) employee_name, date(c.time) day,
+            min(c.time) first_in, max(c.time) last_punch, count(*) punches, max(c.shift) shift,
+            max(e.department) department, max(e.designation) designation, max(e.image) image
+        from `tabEmployee Checkin` c left join `tabEmployee` e on e.name = c.employee
+        where c.employee is not null and c.time >= %(f)s and c.time < date_add(%(t)s, interval 1 day) {cond}
+            and not exists (select 1 from `tabAttendance` a where a.employee = c.employee
+                and a.attendance_date = date(c.time) and a.docstatus < 2)
+        group by c.employee, date(c.time)""", p, as_dict=True)
+
+
+def _pending_row(r):
+    """A not-yet-marked day as an attendance-like row (status "Checked In")."""
+    out_time = r.last_punch if r.punches > 1 else None
+    hours = round((r.last_punch - r.first_in).total_seconds() / 3600, 2) if out_time else None
+    return frappe._dict(name=f"pending-{r.employee}-{r.day}", employee=r.employee, employee_name=r.employee_name,
+        attendance_date=r.day, status="Checked In", in_time=r.first_in, out_time=out_time, working_hours=hours,
+        punches=r.punches, shift=r.shift, department=r.department, designation=r.designation, image=r.image,
+        now_in=r.punches % 2 == 1, docstatus=1, is_pending=1, leave_type=None)
+
+
+@frappe.whitelist()
+def attendance_live(date=None, company=None, department=None, branch=None, search=None, **extra):
+    """Who has checked in on `date` (default today) and is not marked yet: first in, last punch, in or out now."""
+    _check("Attendance")
+    d = getdate(date)
+    rows = [_pending_row(r) for r in _pending_checkins(d, d, company, department, branch, None, search)]
+    rows.sort(key=lambda r: r.in_time, reverse=True)
+    return {"date": str(d), "rows": rows, "in_now": sum(1 for r in rows if r.now_in), "total": len(rows)}
+
+
+# ----------------------------------------------------------------------------- holidays (weekly off)
+def _period_holidays(f, t, company=None, employee=None):
+    """Holidays of the period (Friday weekly off, public holidays) from the employee's holiday list, else the
+    company's. No attendance record is created for them; the screens show them as WO / Holiday."""
+    try:
+        from hrms.utils.holiday_list import get_assigned_holiday_list, get_holiday_list_for_employee
+    except ImportError:
+        return []
+    company = company or (frappe.db.get_value("Employee", employee, "company") if employee else None) or \
+        frappe.defaults.get_user_default("Company")
+    out, seen = [], set()
+    d = getdate(f)
+    while d <= getdate(t):   # the list can change at a year boundary (BGT 2026 → BGT 2027)
+        as_on = max(d, getdate(f))
+        try:
+            hl = get_holiday_list_for_employee(employee, raise_exception=False, as_on=as_on) if employee else \
+                (get_assigned_holiday_list(company, as_on) if company else None)
+        except Exception:
+            hl = None
+        year_end = min(getdate(t), getdate(f"{d.year}-12-31"))
+        if hl:
+            for h in frappe.get_all("Holiday", {"parent": hl, "holiday_date": ["between", [d, year_end]]},
+                    ["holiday_date", "description", "weekly_off"], order_by="holiday_date"):
+                if h.holiday_date not in seen:
+                    seen.add(h.holiday_date)
+                    out.append({"date": str(h.holiday_date), "description": frappe.utils.strip_html(h.description or ""),
+                        "weekly_off": bool(cint(h.weekly_off)), "kind": "WO" if cint(h.weekly_off) else "Holiday"})
+        d = year_end + timedelta(days=1)
+    return out
+
+
 # ----------------------------------------------------------------------------- attendance
 @frappe.whitelist()
 def attendance_overview(from_date, to_date, company=None, department=None, branch=None, employee=None, search=None, **extra):
@@ -239,7 +315,17 @@ def attendance_overview(from_date, to_date, company=None, department=None, branc
         "daily": days,
         "by_department": sorted(depts.values(), key=lambda x: -x["total"]),
         "top_absentees": top_absent,
+        "holidays": _period_holidays(f, t, company, employee),
+        # checked in on a day with no Attendance yet (marked after the shift): {date: employees}
+        "pending": _pending_by_day(f, t, company, department, branch, employee, search),
     }
+
+
+def _pending_by_day(f, t, company, department, branch, employee, search):
+    out = {}
+    for r in _pending_checkins(f, t, company, department, branch, employee, search):
+        out[str(r.day)] = out.get(str(r.day), 0) + 1
+    return out
 
 
 FLAG_SQL = {"late": LATE_SQL, "early_out": EARLY_OUT_SQL, "early_in": EARLY_IN_SQL, "overtime": f"{OT_SQL} > 0"}
@@ -251,11 +337,14 @@ def attendance_records(from_date, to_date, company=None, department=None, branch
                        status=None, start=0, page_length=50, sort_by="attendance_date", sort_order="desc", flag=None, **extra):
     _check("Attendance")
     f, t = _period(from_date, to_date)
+    if employee and status in (None, "", "WO", "Holiday", "Checked In") and not flag:
+        return _employee_records_with_holidays(f, t, company, employee, status, cint(start), min(cint(page_length) or 50, 500),
+            sort_by, sort_order, department, branch, search, extra)
     cond, p = _where("a", company, department, branch, employee, search)
     xc, xp = _extra("a", extra)
     cond += xc
     p.update(xp)
-    if status:
+    if status and status != "__all__":
         cond += " and a.status = %(status)s"
         p["status"] = status
     if flag in FLAG_SQL:
@@ -283,6 +372,26 @@ def attendance_records(from_date, to_date, company=None, department=None, branch
         r.shift_end = str(r.shift_end) if r.shift_end is not None else None
     total = frappe.db.sql(f"select count(*) {base}", p)[0][0]
     return {"rows": rows, "total": total}
+
+
+def _employee_records_with_holidays(f, t, company, employee, status, start, size, sort_by, sort_order, department, branch, search, extra):
+    """One employee's attendance, plus a "Checked In" row for each day with punches but no Attendance yet, and a
+    WO / Holiday row for every holiday without an attendance record (up to today)."""
+    rows = [] if status in ("WO", "Holiday", "Checked In") else attendance_records(f, t, company, department, branch, employee, search,
+        status="__all__", start=0, page_length=500, sort_by="attendance_date", sort_order="asc", **extra)["rows"]
+    if status in (None, "", "Checked In"):
+        rows += [_pending_row(r) for r in _pending_checkins(f, t, None, None, None, employee)]
+    marked = {str(r.attendance_date) for r in rows}
+    emp = frappe.db.get_value("Employee", employee, ["employee_name", "department", "designation", "image"], as_dict=True) or {}
+    for h in _period_holidays(f, t, company, employee):
+        if h["date"] in marked or (status and status != h["kind"]) or getdate(h["date"]) > getdate():
+            continue   # future off days only on the calendar
+        rows.append(frappe._dict(name=f"holiday-{h['date']}", employee=employee, employee_name=emp.get("employee_name"),
+            attendance_date=getdate(h["date"]), status=h["kind"], holiday=h["description"], leave_type=None, shift=None,
+            department=emp.get("department"), designation=emp.get("designation"), image=emp.get("image"), docstatus=1, is_holiday=1))
+    key = {"employee_name": "employee_name", "status": "status", "department": "department"}.get(sort_by, "attendance_date")
+    rows.sort(key=lambda r: (str(r.get(key) or ""), str(r.attendance_date)), reverse=sort_order != "asc")
+    return {"rows": rows[start:start + size], "total": len(rows)}
 
 
 def _add_employee_details(rows):

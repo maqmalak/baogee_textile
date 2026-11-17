@@ -29,6 +29,12 @@ import { humanizeError } from "@/services/frappe";
 import { formatDate, todayISO } from "@/utils/dates";
 import { cn } from "@/utils/cn";
 
+interface Holiday { date: string; description: string; weekly_off: boolean; kind: "WO" | "Holiday" }
+interface LiveRow {
+  name: string; employee: string; employee_name: string; in_time: string; out_time?: string | null; working_hours?: number | null;
+  punches: number; now_in: boolean; shift?: string; department?: string; designation?: string; image?: string;
+}
+
 interface DayRow { date: string; present: number; absent: number; on_leave: number; half_day: number; wfh: number; late?: number; early_out?: number; early_in?: number; ot_hours?: number }
 interface Overview {
   by_status: Record<string, number>;
@@ -54,6 +60,10 @@ interface Overview {
   headcount: number | null;
   active_marked: number | null;
   daily: DayRow[];
+  /** Weekly off (Friday) and public holidays of the period — no attendance record exists for them. */
+  holidays?: Holiday[];
+  /** Employees checked in on a day with no Attendance yet (HRMS marks it after the shift): {date: count}. */
+  pending?: Record<string, number>;
   by_department: { department: string; total: number; present: number; absent: number; on_leave: number; late: number }[];
   top_absentees: { employee: string; employee_name: string; department: string; designation?: string; image?: string; days: number; absent: number; on_leave: number; late: number }[];
 }
@@ -61,6 +71,8 @@ interface Rec {
   name: string; employee: string; employee_name: string; attendance_date: string; status: string; leave_type?: string; shift?: string;
   late_entry?: number; early_exit?: number; in_time?: string; out_time?: string; working_hours?: number; docstatus: number;
   department?: string; designation?: string; image?: string;
+  /** a WO / Holiday row (no attendance record) or a "Checked In" row (punches, attendance not marked yet) */
+  is_holiday?: number; holiday?: string; is_pending?: number; punches?: number; now_in?: boolean;
   late_checkin?: number; early_checkout?: number; early_checkin?: number; late_by?: number | null; early_by?: number | null; overtime_hours?: number;
   shift_start?: string | null; shift_end?: string | null;
 }
@@ -73,6 +85,17 @@ const pct = (n: number, d: number) => (d ? (n / d) * 100 : 0);
 const time = (dt?: string) => (dt ? String(dt).slice(11, 16) : "");
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const weekdayIdx = (iso: string) => (new Date(iso).getDay() + 6) % 7;
+/** Every date of the period (so a weekly off with no attendance still gets a calendar cell). */
+function fillDays(days: DayRow[], from: string, to: string): DayRow[] {
+  const by = Object.fromEntries(days.map((d) => [d.date, d]));
+  const out: DayRow[] = [];
+  const end = new Date(`${to}T00:00:00`);
+  for (let d = new Date(`${from}T00:00:00`); d <= end; d.setDate(d.getDate() + 1)) {
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    out.push(by[iso] ?? { date: iso, present: 0, absent: 0, on_leave: 0, half_day: 0, wfh: 0 });
+  }
+  return out.length ? out : days;
+}
 
 const PRESENT_LEVELS = ["Excellent", "Good", "Fair", "Poor"];
 const ABSENCE_LEVELS = ["Very Low", "Low", "Moderate", "High"];
@@ -233,6 +256,49 @@ function OvertimeSection({ ov, flag, setFlag, onDepartment }: { ov?: Overview; f
   );
 }
 
+/** Today: who has checked in and is not marked yet (HRMS marks attendance after the shift ends). */
+function LiveToday({ company, department, branch, search }: { company?: string; department?: string; branch?: string; search?: string }) {
+  const { data, isLoading } = useHrInsights<{ date: string; rows: LiveRow[]; in_now: number; total: number }>(
+    "attendance_live", { company, department, branch, search },
+  );
+  const [all, setAll] = useState(false);
+  if (isLoading && !data) return null;
+  const rows = data?.rows ?? [];
+  const shown = all ? rows : rows.slice(0, 12);
+  return (
+    <SectionCard
+      title={`Checked in today · ${rows.length}`}
+      description={`From the gate punches, live. ${data?.in_now ?? 0} inside now · ${rows.length - (data?.in_now ?? 0)} checked out. Their attendance is marked automatically after the shift ends.`}
+    >
+      {!rows.length ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">No one has checked in today yet (or today's attendance is already marked).</p>
+      ) : (
+        <>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {shown.map((r) => (
+              <Link key={r.name} to={`/hr/employees/${encodeURIComponent(r.employee)}`} className="flex items-center gap-3 rounded-xl border border-border p-2.5 transition-colors hover:bg-muted/50">
+                <EmployeePhoto name={r.employee_name} src={r.image} size="sm" editable={false} className="ring-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{r.employee_name}</p>
+                  <p className="truncate text-[11px] text-muted-foreground">{strip(r.department)}{r.shift ? ` · ${r.shift}` : ""}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-mono text-xs"><LogIn className="mr-0.5 inline h-3 w-3" />{time(r.in_time)}{r.out_time ? <> <LogOut className="mx-0.5 inline h-3 w-3" />{time(r.out_time)}</> : null}</p>
+                  <span className={cn("mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                    r.now_in ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-slate-500/15 text-slate-600 dark:text-slate-300")}>
+                    <span className={cn("h-1.5 w-1.5 rounded-full", r.now_in ? "bg-emerald-500" : "bg-slate-400")} />{r.now_in ? "Inside" : "Out"}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+          {rows.length > 12 && <button type="button" className="mt-3 text-sm font-medium text-primary hover:underline" onClick={() => setAll(!all)}>{all ? "Show less" : `Show all ${rows.length}`}</button>}
+        </>
+      )}
+    </SectionCard>
+  );
+}
+
 /** Attendance-rate colour for a calendar cell. */
 function rateTone(rate: number | null) {
   if (rate === null) return "bg-muted/40 text-muted-foreground";
@@ -244,9 +310,10 @@ function rateTone(rate: number | null) {
 }
 
 /** Calendar of the period, each day coloured by its attendance rate; click a day to drill into it. */
-function RateCalendar({ days, period }: { days: DayRow[]; period: Period }) {
+function RateCalendar({ days, period, holidays = [], pending = {} }: { days: DayRow[]; period: Period; holidays?: Holiday[]; pending?: Record<string, number> }) {
   const lead = days.length ? weekdayIdx(days[0].date) : 0;
   const today = todayISO();
+  const off = Object.fromEntries(holidays.map((h) => [h.date, h]));
   return (
     <div>
       <div className="mb-1.5 grid grid-cols-7 gap-1.5 text-center text-[11px] font-medium text-muted-foreground">
@@ -257,6 +324,14 @@ function RateCalendar({ days, period }: { days: DayRow[]; period: Period }) {
         {days.map((d) => {
           const marked = markedOf(d);
           const rate = marked ? pct(presentOf(d), marked) : null;
+          const hol = off[d.date];
+          const waiting = pending[d.date] || 0;
+          const tip = [
+            formatDate(d.date),
+            hol ? `${hol.kind === "WO" ? "Weekly off" : "Holiday"}: ${hol.description}` : "",
+            marked ? `${rate!.toFixed(1)}% · ${d.present + d.wfh} present, ${d.half_day} half day, ${d.absent} absent, ${d.on_leave} on leave` : "",
+            waiting ? `${waiting} checked in, attendance not marked yet` : "",
+          ].filter(Boolean).join(" — ") || `${formatDate(d.date)} — nothing marked`;
           return (
             <button
               key={d.date}
@@ -265,15 +340,18 @@ function RateCalendar({ days, period }: { days: DayRow[]; period: Period }) {
                 period.setDay(d.date);
                 period.setMode("day");
               }}
-              title={`${formatDate(d.date)} — ${marked ? `${rate!.toFixed(1)}% · ${d.present + d.wfh} present, ${d.half_day} half day, ${d.absent} absent, ${d.on_leave} on leave` : "nothing marked"}`}
+              title={tip}
               className={cn(
-                "flex aspect-square flex-col items-center justify-center rounded-lg text-xs transition-transform hover:scale-105 hover:shadow-md",
-                rateTone(rate),
+                "relative flex aspect-square flex-col items-center justify-center rounded-lg text-xs transition-transform hover:scale-105 hover:shadow-md",
+                hol && rate === null ? (hol.kind === "WO" ? "bg-slate-500/20 text-slate-700 dark:text-slate-200" : "bg-violet-500/25 text-violet-800 dark:text-violet-200") : rateTone(rate),
                 d.date === today && "ring-2 ring-primary ring-offset-1 ring-offset-background",
               )}
             >
               <span className="font-semibold">{Number(d.date.slice(8))}</span>
-              {rate !== null && <span className="text-[10px] opacity-90">{Math.round(rate)}%</span>}
+              {rate !== null ? <span className="text-[10px] opacity-90">{Math.round(rate)}%</span>
+                : hol ? <span className="text-[10px] font-semibold">{hol.kind === "WO" ? "WO" : "Hol"}</span>
+                : waiting ? <span className="text-[10px] font-medium text-sky-700 dark:text-sky-300">{waiting} in</span> : null}
+              {hol && rate !== null && <span className="absolute right-1 top-0.5 text-[8px] font-bold opacity-80">{hol.kind === "WO" ? "WO" : "H"}</span>}
             </button>
           );
         })}
@@ -284,6 +362,8 @@ function RateCalendar({ days, period }: { days: DayRow[]; period: Period }) {
           <span key={l} className="inline-flex items-center gap-1"><span className={cn("h-3 w-3 rounded", rateTone(Number(r)))} />{l}%</span>
         ))}
         <span className="inline-flex items-center gap-1"><span className={cn("h-3 w-3 rounded", rateTone(null))} />not marked</span>
+        <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-slate-500/20" />WO (weekly off)</span>
+        <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-violet-500/25" />Holiday</span>
       </div>
     </div>
   );
@@ -446,12 +526,28 @@ export default function AttendancePage() {
       key: "status",
       label: "Status",
       sortable: true,
-      render: (r) => (
-        <div className="flex flex-col items-start gap-0.5">
-          <StatusBadge status={r.status} />
-          {r.leave_type && <span className="text-[11px] text-muted-foreground">{r.leave_type}</span>}
-        </div>
-      ),
+      render: (r) =>
+        r.is_holiday ? (
+          <div className="flex flex-col items-start gap-0.5">
+            <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+              r.status === "WO" ? "bg-slate-500/15 text-slate-700 dark:text-slate-200" : "bg-violet-500/15 text-violet-700 dark:text-violet-300")}>
+              {r.status === "WO" ? "WO · Weekly off" : "Holiday"}
+            </span>
+            {r.holiday && <span className="text-[11px] text-muted-foreground">{r.holiday}</span>}
+          </div>
+        ) : r.is_pending ? (
+          <div className="flex flex-col items-start gap-0.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-500/15 px-2.5 py-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
+              <span className={cn("h-1.5 w-1.5 rounded-full", r.now_in ? "bg-emerald-500" : "bg-slate-400")} />Checked in
+            </span>
+            <span className="text-[11px] text-muted-foreground">{r.now_in ? "inside now" : "checked out"} · {r.punches} punch{r.punches === 1 ? "" : "es"} · marked after the shift</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-start gap-0.5">
+            <StatusBadge status={r.status} />
+            {r.leave_type && <span className="text-[11px] text-muted-foreground">{r.leave_type}</span>}
+          </div>
+        ),
     },
     { key: "department", label: "Department", sortable: true, render: (r) => <span className="text-sm">{strip(r.department)}</span>, getValue: (r) => strip(r.department) },
     { key: "shift", label: "Shift", render: (r) => <span className="text-sm">{r.shift || "—"}</span> },
@@ -492,7 +588,19 @@ export default function AttendancePage() {
     },
   ];
 
-  const tabs = [{ value: "", label: "All", n: ov?.records }, ...STATUSES.map((x) => ({ value: x, label: x, n: ov?.by_status[x] ?? 0 }))].filter((t) => t.value === "" || t.n);
+  // One employee: their list also shows days checked in but not marked yet, and weekly offs / holidays (no records).
+  const today = todayISO();
+  const pendingN = employee ? Object.values(ov?.pending ?? {}).reduce((a, b) => a + b, 0) : 0;
+  const woN = employee ? (ov?.holidays ?? []).filter((h) => h.kind === "WO" && h.date <= today).length : 0;
+  const holN = employee ? (ov?.holidays ?? []).filter((h) => h.kind === "Holiday" && h.date <= today).length : 0;
+  const tabs = [
+    { value: "", label: "All", n: (ov?.records ?? 0) + pendingN + woN + holN },
+    ...STATUSES.map((x) => ({ value: x, label: x, n: ov?.by_status[x] ?? 0 })),
+    { value: "Checked In", label: "Checked in", n: pendingN },
+    { value: "WO", label: "WO", n: woN },
+    { value: "Holiday", label: "Holiday", n: holN },
+  ].filter((t) => t.value === "" || t.n);
+  const liveDay = period.from <= today && today <= period.to;
   const expected = ov?.headcount && period.mode === "day" ? ov.headcount : null;
   const markedActive = ov?.active_marked ?? 0;
 
@@ -529,6 +637,8 @@ export default function AttendancePage() {
             : { label: "Employees marked", value: (ov?.employees ?? 0).toLocaleString(), icon: <Users2 className="h-4 w-4" />, tone: "sky", valueSuffix: ov?.avg_hours ? `avg ${ov.avg_hours} h/day` : `${(ov?.records ?? 0).toLocaleString()} records` },
         ]}
       />
+
+      {liveDay && !employee && <LiveToday company={company} department={dims.department} branch={dims.branch} search={search} />}
 
       <PunctualityStrip ov={ov} flag={flag} setFlag={setFlag} />
 
@@ -595,7 +705,7 @@ export default function AttendancePage() {
         <div className="grid gap-4 lg:grid-cols-3">
           {period.days <= 62 ? (
             <SectionCard title="Attendance calendar" description="Each day's attendance rate — click a day to open it">
-              <RateCalendar days={ov?.daily ?? []} period={period} />
+              <RateCalendar days={fillDays(ov?.daily ?? [], period.from, period.to)} period={period} holidays={ov?.holidays} pending={ov?.pending} />
             </SectionCard>
           ) : (
             <ChartCard title="Attendance rate trend" subtitle="Daily rate across the range">
@@ -669,7 +779,9 @@ export default function AttendancePage() {
             printTitle="Attendance"
             printSubtitle={period.label}
             pageSizeOptions={[25, 50, 100, 200]}
-            rowActions={(r) => [{ label: "Open in ERPNext", icon: <ExternalLink className="h-4 w-4" />, onClick: () => window.open(`/desk/attendance/${encodeURIComponent(r.name)}`, "_blank") }]}
+            rowActions={(r) => r.is_holiday ? [] : r.is_pending
+              ? [{ label: "Check-ins", icon: <Clock3 className="h-4 w-4" />, onClick: () => window.open(`/desk/employee-checkin?employee=${encodeURIComponent(r.employee)}`, "_blank") }]
+              : [{ label: "Open in ERPNext", icon: <ExternalLink className="h-4 w-4" />, onClick: () => window.open(`/desk/attendance/${encodeURIComponent(r.name)}`, "_blank") }]}
             emptyTitle="No attendance records"
             emptyDescription="Nothing matches this period and these filters."
             serverSide={{

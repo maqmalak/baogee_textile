@@ -25,7 +25,7 @@ from baogee_textile.importers.legacy import (
 # Employee fields filled from a duplicate when blank on the sheet's record
 MERGE_FIELDS = ["mm_legacy_id", "mm_father_name", "mm_father_name_urdu", "date_of_birth", "cell_number", "current_address",
 	"permanent_address", "emergency_phone_number", "blood_group", "mm_city", "mm_province", "mm_qualification", "mm_experience",
-	"mm_rest_day", "mm_employment_nature", "mm_gross_salary", "salary_mode", "default_shift", "gender"]
+	"employment_type", "mm_gross_salary", "salary_mode", "default_shift", "gender"]
 
 
 def _s(v):

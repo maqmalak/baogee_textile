@@ -111,9 +111,8 @@ def _build_custom_fields():
     add("Employee", "mm_father_name", "Father's Name", "Data", None, "mm_urdu_name")
     add("Employee", "mm_legacy_id", "Old HR Site ID", "Int", None, "mm_placeholder_data", read_only=1, no_copy=1,
         description="Employee id on the old HR site (baogeetextile.pk); links its attendance and salary history.")
-    add("Employee", "mm_rest_day", "Rest Day", "Data", None, "mm_legacy_id")
-    add("Employee", "mm_employment_nature", "Employment Nature", "Data", None, "mm_rest_day")
-    add("Employee", "mm_import_remarks", "Import Remarks", "Small Text", None, "mm_employment_nature", read_only=1, no_copy=1,
+    # rest day = the Holiday List's weekly off; employment nature = the standard Employment Type
+    add("Employee", "mm_import_remarks", "Import Remarks", "Small Text", None, "mm_legacy_id", read_only=1, no_copy=1,
         description="What the old-site import filled in or assumed (missing joining / leaving / birth dates).")
     add("Employee", "mm_father_name_urdu", "Father's Name (Urdu)", "Data", None, "mm_father_name")
     add("Employee", "mm_gross_salary", "Gross Salary", "Currency", None, "mm_basic_salary")

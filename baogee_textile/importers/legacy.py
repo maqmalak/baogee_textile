@@ -83,6 +83,14 @@ def _time(v):
 	return None
 
 
+def _employment_type(nature):
+	"""Old site's employment nature -> Employment Type (Permanent with or without overtime)."""
+	n = _s(nature).lower()
+	if not n.startswith("permanent"):
+		return None
+	return "Permanent (no OT)" if "not allowed" in n else "Permanent (OT allowed)"
+
+
 def _phone(v):
 	"""Digits only (Pakistani mobile, e.g. 03046616376); anything that isn't 10–13 digits is dropped."""
 	digits = re.sub(r"\D", "", _s(v))
@@ -263,8 +271,9 @@ def import_employees(hr, first_att, last_att, span, dry_run, log, plan):
 	for e in recs.values():
 		code_count[_s(e.get("codeUNI")).upper()] += 1
 	by_legacy = {r.mm_legacy_id: r.name for r in existing.values() if r.mm_legacy_id}
-	if not frappe.db.exists("Employment Type", "Daily Wager"):
-		frappe.get_doc({"doctype": "Employment Type", "employee_type_name": "Daily Wager"}).insert(ignore_permissions=True)
+	for etype in ("Daily Wager", "Permanent (OT allowed)", "Permanent (no OT)"):
+		if not frappe.db.exists("Employment Type", etype):
+			frappe.get_doc({"doctype": "Employment Type", "employee_type_name": etype}).insert(ignore_permissions=True)
 	stats = defaultdict(int)
 	mapping, shift_cache = {}, {}
 	used_devices = {str(d): n for n, d in frappe.get_all("Employee", {"attendance_device_id": ["is", "set"]},
@@ -281,11 +290,10 @@ def import_employees(hr, first_att, last_att, span, dry_run, log, plan):
 		values = {
 			"mm_legacy_id": lid, "mm_father_name": _s(e.get("fatherName")).title() or None,
 			"attendance_device_id": str(e["deviceCode"]) if e.get("deviceCode") else None,
-			"mm_rest_day": _s(e.get("restDay")) or None, "mm_employment_nature": _s(e.get("nature")) or None,
 			"cnic": _s(e.get("cnic")) if len(_s(e.get("cnic"))) >= 13 else None,
 			"mm_basic_salary": flt(e.get("basicSalary")) or None, "mm_urdu_name": _s(e.get("nameUrdu")) or None,
 			"cell_number": _phone(e.get("contact1")), "current_address": _s(e.get("address1")) or None,
-			"employment_type": "Daily Wager" if "Daily" in _s(e.get("nature")) or lid in daily_ids else None,
+			"employment_type": "Daily Wager" if "Daily" in _s(e.get("nature")) or lid in daily_ids else _employment_type(e.get("nature")),
 			"date_of_joining": doj, "date_of_birth": dob,
 			"blood_group": _blood(e.get("bloodGroup")), "permanent_address": _s(e.get("address2")) or None,
 			"emergency_phone_number": _phone(e.get("contact2")),

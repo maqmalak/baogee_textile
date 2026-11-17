@@ -394,6 +394,24 @@ fi
 # site_config.json with the database password).
 chmod o+x "$HOME_DIR" "$BENCH_DIR" "${BENCH_DIR}/sites"
 chmod -R o+rX "${BENCH_DIR}/sites/assets" "${BENCH_DIR}"/apps/*/*/public 2>/dev/null || true
+# Biometric live capture: one always-on process for this site, holding a connection to every machine with
+# "Live Capture" on, so each punch reaches the site (and the Check-in Display) within seconds.
+LIVE_CONF="/etc/supervisor/conf.d/biometric-live-${SITE}.conf"
+sudo tee "$LIVE_CONF" >/dev/null <<CONF
+[program:biometric-live-${SITE}]
+command=${BENCH_DIR}/env/bin/python -m frappe.utils.bench_helper frappe --site ${SITE} execute biometric_sync.live.run
+directory=${BENCH_DIR}/sites
+user=${FRAPPE_USER}
+autostart=true
+autorestart=true
+startsecs=10
+stopwaitsecs=15
+stdout_logfile=${BENCH_DIR}/logs/biometric-live.log
+stderr_logfile=${BENCH_DIR}/logs/biometric-live.error.log
+environment=PYTHONUNBUFFERED=1
+CONF
+sudo supervisorctl reread >/dev/null && sudo supervisorctl update >/dev/null
+info "biometric live capture service: ${LIVE_CONF} (turn Live capture on per machine in ${SITE}/biometric → Machines)"
 sudo nginx -t
 sudo systemctl reload nginx
 sudo supervisorctl restart all || warn "a process did not start — see: sudo supervisorctl status, and ${BENCH_DIR}/logs/"
